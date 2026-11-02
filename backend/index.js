@@ -4,6 +4,7 @@ import cors from "cors";
 import connectDB from "./src/config/db.js";
 import bookRoute from "./src/routes/bookRoutes.js";
 import authRoute from "./src/routes/authRoutes.js";
+import borrowRoute from "./src/routes/borrowRoutes.js";
 
 const app = express();
 
@@ -14,6 +15,7 @@ app.get("/", (req, res) => res.send("Server is running"));
 
 app.use('/book', bookRoute)
 app.use('/auth', authRoute)
+app.use('/borrow', borrowRoute)
 
 await connectDB();
 app.listen(process.env.PORT, () =>
