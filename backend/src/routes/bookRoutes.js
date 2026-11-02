@@ -24,7 +24,7 @@ bookRoute
             res.status(200).json({
                 success: true,
                 message: 'Book read successfully',
-                result: result
+              result: result
             });
         } catch (error) {
             console.error('Error:', error.message);
