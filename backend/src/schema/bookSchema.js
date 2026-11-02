@@ -12,6 +12,6 @@ const bookSchema = Schema(
   { timestamps: true }
 );
 
-let Book = model("Book", bookSchema);
+const Book = model("Book", bookSchema);
 
 export default Book;
