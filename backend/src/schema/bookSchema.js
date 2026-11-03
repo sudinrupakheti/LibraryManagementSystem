@@ -12,6 +12,12 @@ const bookSchema = Schema(
   { timestamps: true }
 );
 
+bookSchema.pre("validate", function () {
+  if (this.isNew && this.availableCopies === undefined) {
+    this.availableCopies = this.totalCopies;
+  }
+});
+
 const Book = model("Book", bookSchema);
 
 export default Book;

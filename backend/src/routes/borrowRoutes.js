@@ -1,7 +1,8 @@
 import { Router } from "express";
-import Borrow from "../schema/src/schema/borrowSchema";
+import Borrow from "../schema/borrowSchema.js";
 import Book from '../schema/bookSchema.js';
-import protect from "../middleware/authMiddleware";
+import protect from "../middleware/authMiddleware.js";
+import checkAdmin from "../middleware/adminMiddleware.js";
 
 const borrowRoute = Router();
 
@@ -19,7 +20,6 @@ borrowRoute
         result: result
       });
     } catch (error) {
-      console.error('Error:', error.message);
       res.status(500).json({ success: false, message: 'Error fetching borrow history' });
     }
   });
@@ -39,41 +39,51 @@ borrowRoute
         result: result
       });
     } catch (error) {
-      console.error('Error:', error.message);
       res.status(500).json({ success: false, message: 'Error fetching borrow history' });
     }
-  });
-
-borrowRoute
-  .route('/')
+  })
   .post(protect, async (req, res) => {
     try {
       const { bookId, dueDate } = req.body;
 
-      const book = await Book.findById(bookId);
+      if (!bookId || !dueDate) {
+        return res.status(400).json({ success: false, message: 'bookId and dueDate required' });
+      }
+
+      const due = new Date(dueDate);
+      if (isNaN(due) || due <= new Date()) {
+        return res.status(400).json({ success: false, message: 'Invalid due date' });
+      }
+
+      const book = await Book.findOneAndUpdate(
+        { _id: bookId, availableCopies: { $gt: 0 } },
+        { $inc: { availableCopies: -1 } },
+        { returnDocument: 'after' }
+      );
+
       if (!book) {
-        return res.status(404).json({ success: false, message: 'Book not found' });
+        return res.status(400).json({ success: false, message: 'Book not found or unavailable' });
       }
-
-      if (book.availableCopies <= 0) {
-        return res.status(400).json({ success: false, message: 'No copies available' });
+      try {
+        const borrow = await Borrow.create({
+          bookId,
+          userID: req.user.id,
+          dueDate: due
+        });
+        return res.status(201).json({
+          success: true,
+          message: 'Book borrowed successfully',
+          result: borrow
+        });
+      } catch (err) {
+        await Book.findByIdAndUpdate(bookId, { $inc: { availableCopies: 1 } });
+        throw err;
       }
-
-      const borrow = await Borrow.create({
-        bookId: bookId,
-        userID: req.user.id,
-        dueDate: dueDate
-      });
-      book.availableCopies -= 1;
-      await book.save();
-
-      res.status(201).json({
-        success: true,
-        message: 'Book borrowed successfully',
-        result: borrow
-      });
     } catch (error) {
       console.error('Error:', error.message);
+      if (error.name === 'CastError') {
+        return res.status(400).json({ success: false, message: 'Invalid book id' });
+      }
       res.status(500).json({ success: false, message: 'Error borrowing book' });
     }
   });
@@ -82,28 +92,17 @@ borrowRoute
   .route('/:id/return')
   .put(protect, async (req, res) => {
     try {
-      const borrow = await Borrow.findById(req.params.id);
+      const borrow = await Borrow.findOneAndUpdate(
+        { _id: req.params.id, status: { $ne: 'returned' } },
+        { status: 'returned', returnDate: Date.now() },
+        { returnDocument: 'after' }
+      );
 
       if (!borrow) {
-        return res.status(404).json({
-          success: false,
-          message: 'Borrow record not found'
-        });
+        return res.status(404).json({ success: false, message: 'Borrow not found or already returned' });
       }
 
-      if (borrow.status === 'returned') {
-        return res.status(400).json({
-          success: false,
-          message: 'Book already returned'
-        });
-      }
-      borrow.returnDate = Date.now();
-      borrow.status = 'returned';
-      await borrow.save();
-
-      await Book.findByIdAndUpdate(borrow.bookId, {
-        $inc: { availableCopies: 1 }
-      });
+      await Book.findByIdAndUpdate(borrow.bookId, { $inc: { availableCopies: 1 } });
 
       res.status(200).json({
         success: true,
@@ -111,10 +110,11 @@ borrowRoute
         result: borrow
       });
     } catch (error) {
-      console.error('Error:', error.message);
-      res.status(500).json({
-        success: false,
-        message: 'Error returning book'
-      });
+      if (error.name === 'CastError') {
+        return res.status(400).json({ success: false, message: 'Invalid borrow id' });
+      }
+      res.status(500).json({ success: false, message: 'Error returning book' });
     }
   });
+
+export default borrowRoute
