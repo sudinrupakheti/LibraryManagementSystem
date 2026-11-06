@@ -3,6 +3,13 @@ import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 
 const API = 'http://localhost:8000';
+const LOAN_DAYS = 14;
+
+// Local-timezone-safe YYYY-MM-DD (plain toISOString() can be off by one day)
+const toISODate = (date) =>
+  new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 10);
 
 const FIELDS = [
   { name: 'title', placeholder: 'Title' },
@@ -78,11 +85,11 @@ const Books = () => {
     }
   };
 
-  const handleBorrow = async (bookId) => {
-    const dueDate = prompt('Enter due date (YYYY-MM-DD):');
-    if (!dueDate) return;
+  const handleBorrow = async (book) => {
+    const dueDate = toISODate(new Date(Date.now() + LOAN_DAYS * 24 * 60 * 60 * 1000));
+    if (!window.confirm(`Borrow "${book.title}"?\nDue back: ${dueDate}`)) return;
     try {
-      await axios.post(`${API}/borrow`, { bookId, dueDate });
+      await axios.post(`${API}/borrow`, { bookId: book._id, dueDate });
       alert('Book borrowed successfully!');
       fetchBooks();
     } catch (err) {
@@ -127,35 +134,49 @@ const Books = () => {
         </form>
       )}
 
-      <ul style={{ listStyle: 'none', padding: 0 }}>
-        {books.map((book) => {
-          const available = book.availableCopies ?? book.totalCopies;
-          return (
-            <li
-              key={book._id}
-              style={{ padding: '12px 0', borderBottom: '1px solid #ccc' }}
-            >
-              <strong>{book.title}</strong> by {book.author}
-              <div>ISBN: {book.isbn} | Category: {book.category}</div>
-              <div>Available: {available} / {book.totalCopies}</div>
-
-              <div style={{ marginTop: 8, display: 'flex', gap: '8px' }}>
-                {isAdmin && (
-                  <>
-                    <button onClick={() => handleEdit(book)}>Edit</button>
-                    <button onClick={() => handleDelete(book._id)}>Delete</button>
-                  </>
-                )}
-                {user && available > 0 && (
-                  <button onClick={() => handleBorrow(book._id)}>
-                    Borrow
-                  </button>
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+      {books.length === 0 ? (
+        <p>No books in the library yet.</p>
+      ) : (
+        <table border="1" cellPadding="10" style={{ width: '100%' }}>
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Author</th>
+              <th>ISBN</th>
+              <th>Category</th>
+              <th>Available</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {books.map((book) => {
+              const available = book.availableCopies ?? book.totalCopies;
+              return (
+                <tr key={book._id}>
+                  <td><strong>{book.title}</strong></td>
+                  <td>{book.author}</td>
+                  <td>{book.isbn}</td>
+                  <td>{book.category}</td>
+                  <td>{available} / {book.totalCopies}</td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {isAdmin && (
+                        <>
+                          <button onClick={() => handleEdit(book)}>Edit</button>
+                          <button onClick={() => handleDelete(book._id)}>Delete</button>
+                        </>
+                      )}
+                      {user && available > 0 && (
+                        <button onClick={() => handleBorrow(book)}>Borrow</button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 };

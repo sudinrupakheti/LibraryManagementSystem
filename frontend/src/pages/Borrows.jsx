@@ -1,31 +1,34 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 
+const API = 'http://localhost:8000';
+
+const fmt = (date) => new Date(date).toLocaleDateString();
+
 const MyBorrows = () => {
   const [borrows, setBorrows] = useState([]);
+
+  const fetchMyBorrows = async () => {
+    try {
+      const { data } = await axios.get(`${API}/borrow/my`);
+      setBorrows(data.result ?? []);
+    } catch (err) {
+      console.error('Error fetching borrows:', err);
+    }
+  };
 
   useEffect(() => {
     fetchMyBorrows();
   }, []);
 
-  const fetchMyBorrows = async () => {
+  const handleReturn = async (id) => {
+    if (!window.confirm('Return this book?')) return;
     try {
-      const response = await axios.get('http://localhost:8000/borrow/my');
-      setBorrows(response.data.result);
-    } catch (error) {
-      console.error('Error fetching borrows:', error);
-    }
-  };
-
-  const handleReturn = async (borrowId) => {
-    if (window.confirm('Return this book?')) {
-      try {
-        await axios.put(`http://localhost:8000/borrow/${borrowId}/return`);
-        fetchMyBorrows();
-        alert('Book returned successfully!');
-      } catch (error) {
-        alert(error.response?.data?.message || 'Error returning book');
-      }
+      await axios.put(`${API}/borrow/${id}/return`);
+      alert('Book returned successfully!');
+      fetchMyBorrows();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Error returning book');
     }
   };
 
@@ -53,26 +56,22 @@ const MyBorrows = () => {
               <tr key={borrow._id}>
                 <td>{borrow.bookId?.title || 'Unknown'}</td>
                 <td>{borrow.bookId?.author || 'Unknown'}</td>
-                <td>{new Date(borrow.borrowDate).toLocaleDateString()}</td>
-                <td>{new Date(borrow.dueDate).toLocaleDateString()}</td>
+                <td>{fmt(borrow.borrowDate)}</td>
+                <td>{fmt(borrow.dueDate)}</td>
+                <td>{borrow.returnDate ? fmt(borrow.returnDate) : '-'}</td>
                 <td>
-                  {borrow.returnDate
-                    ? new Date(borrow.returnDate).toLocaleDateString()
-                    : '-'}
-                </td>
-                <td>
-                  <span style={{
-                    color: borrow.status === 'returned' ? 'green' : 'orange',
-                    fontWeight: 'bold'
-                  }}>
+                  <span
+                    style={{
+                      color: borrow.status === 'returned' ? 'green' : 'orange',
+                      fontWeight: 'bold',
+                    }}
+                  >
                     {borrow.status}
                   </span>
                 </td>
                 <td>
                   {borrow.status === 'borrowed' && (
-                    <button onClick={() => handleReturn(borrow._id)}>
-                      Return
-                    </button>
+                    <button onClick={() => handleReturn(borrow._id)}>Return</button>
                   )}
                 </td>
               </tr>
